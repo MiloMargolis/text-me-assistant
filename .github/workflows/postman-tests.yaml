@@ -1,0 +1,78 @@
+name: Postman Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  postman-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install Newman and Reporter
+      run: npm install newman newman-reporter-summary
+    
+    - name: Install AWS SAM CLI
+      run: |
+        if [ -d "/usr/local/aws-sam-cli/current" ]; then
+          echo "AWS SAM CLI is already installed. Updating..."
+          wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
+          unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
+          sudo ./sam-installation/install --update
+        else
+          echo "Installing AWS SAM CLI..."
+          wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
+          unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
+          sudo ./sam-installation/install
+        fi
+        sam --version
+    
+    - name: Install Dependencies
+      run: npm run install:all
+    
+    - name: Build SAM Application
+      run: sam build
+    
+    - name: Create env.json
+      run: |
+        echo '{
+          "MessageFunction": {
+            "NODE_ENV": "development",
+            "OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}",
+            "TWILIO_ACCOUNT_SID": "${{ secrets.TWILIO_ACCOUNT_SID }}",
+            "TWILIO_AUTH_TOKEN": "${{ secrets.TWILIO_AUTH_TOKEN }}",
+            "TWILIO_PHONE_NUMBER": "${{ secrets.TWILIO_PHONE_NUMBER }}"
+          },
+          "EscalateFunction": {
+            "NODE_ENV": "development",
+            "TWILIO_ACCOUNT_SID": "${{ secrets.TWILIO_ACCOUNT_SID }}",
+            "TWILIO_AUTH_TOKEN": "${{ secrets.TWILIO_AUTH_TOKEN }}",
+            "TWILIO_PHONE_NUMBER": "${{ secrets.TWILIO_PHONE_NUMBER }}",
+            "MANAGER_PHONE_NUMBER": "${{ secrets.MANAGER_PHONE_NUMBER }}"
+          }
+        }' > env.json
+    
+    - name: Start Server
+      run: |
+        sam local start-api --env-vars env.json &
+        sleep 5
+        newman run postman_collection.json -e postman_environment.json -r cli,summary --verbose
+        continue-on-error: true
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        NODE_ENV: 'development'
+        BASE_URL: 'http://localhost:3000'
+        TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+        TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+        TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
+        MANAGER_PHONE_NUMBER: ${{ secrets.MANAGER_PHONE_NUMBER }}

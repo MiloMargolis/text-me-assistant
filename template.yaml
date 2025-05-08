@@ -64,37 +64,6 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-*
 
-  # SageMaker Model
-  MessageClassifierModel:
-    Type: AWS::SageMaker::Model
-    Properties:
-      ExecutionRoleArn: !GetAtt ApplicationRole.Arn
-      PrimaryContainer:
-        Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/blazingtext:latest'
-        Mode: SingleModel
-        Environment:
-          SAGEMAKER_PROGRAM: 'blazingtext'
-          SAGEMAKER_SUBMIT_DIRECTORY: '/opt/ml/model'
-          SAGEMAKER_CONTAINER_LOG_LEVEL: '20'
-          SAGEMAKER_REGION: !Ref AWS::Region
-
-  # SageMaker Endpoint Configuration
-  MessageClassifierEndpointConfig:
-    Type: AWS::SageMaker::EndpointConfig
-    Properties:
-      ProductionVariants:
-        - InitialInstanceCount: 1
-          InstanceType: ml.t2.medium
-          ModelName: !Ref MessageClassifierModel
-          VariantName: AllTraffic
-
-  # SageMaker Endpoint
-  MessageClassifierEndpoint:
-    Type: AWS::SageMaker::Endpoint
-    Properties:
-      EndpointConfigName: !Ref MessageClassifierEndpointConfig
-      EndpointName: !Sub '${AWS::StackName}-message-classifier'
-
   MessageFunction:
     Type: AWS::Serverless::Function
     Properties:

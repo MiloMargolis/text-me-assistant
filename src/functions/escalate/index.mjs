@@ -1,3 +1,5 @@
+import twilio from 'twilio';
+
 // Mock Twilio client for development
 const mockTwilioClient = {
   validateRequest: () => true,
@@ -13,6 +15,42 @@ const mockTwilioClient = {
     }
   }
 };
+
+// Initialize Twilio client based on environment
+const twilioClient = process.env.NODE_ENV === 'development' 
+  ? mockTwilioClient 
+  : twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+// Helper function to create TwiML response
+function createTwiMLResponse(message, statusCode = 200) {
+  const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
+    <Response>
+      <Message>${message}</Message>
+    </Response>`;
+
+  return {
+    statusCode,
+    body: twimlResponse,
+    headers: {
+      'Content-Type': 'application/xml'
+    }
+  };
+}
+
+// Helper function to send SMS via Twilio
+async function sendSMS(to, body) {
+  try {
+    await twilioClient.messages.create({
+      body,
+      to,
+      from: process.env.TWILIO_PHONE_NUMBER
+    });
+    console.log(`SMS sent to ${to}`);
+  } catch (error) {
+    console.error('Error sending SMS:', error);
+    throw error;
+  }
+} 
 
 // Helper function to validate request payload
 function validatePayload(body) {
@@ -41,20 +79,6 @@ function formatEscalationMessage(originalMessage, fromNumber, importanceScore) {
   return `🚨 ESCALATION ALERT${scoreText}\n\nFrom: ${fromNumber}\nMessage: ${originalMessage}`;
 }
 
-function createTwiMLResponse(message, statusCode = 200) {
-  const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
-    <Response>
-      <Message>${message}</Message>
-    </Response>`;
-  return {
-    statusCode,
-    body: twimlResponse,
-    headers: {
-      'Content-Type': 'application/xml'
-    }
-  };
-}
-
 export const handler = async (event) => {
   try {
     // Parse request body
@@ -73,10 +97,10 @@ export const handler = async (event) => {
     );
 
     // Send SMS to manager using mock client
-    const result = await mockTwilioClient.messages.create({
+    const result = await twilioClient.messages.create({
       body: escalationMessage,
-      to: "+15551234567", // Mock manager number
-      from: "+15559876543" // Mock sender number
+      to: process.env.MANAGER_PHONE_NUMBER,
+      from: process.env.TWILIO_PHONE_NUMBER
     });
     console.log('Mocked message response:', result);
 
